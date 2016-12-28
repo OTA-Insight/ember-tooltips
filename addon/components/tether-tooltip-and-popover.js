@@ -1,7 +1,7 @@
 import Ember from 'ember';
 import EmberTetherComponent from 'ember-tether/components/ember-tether';
 
-const { $, computed, run, on } = Ember;
+const { $, computed, observer, run, on } = Ember;
 
 const defaultPosition = 'center';
 
@@ -95,7 +95,7 @@ export default EmberTetherComponent.extend({
 
   /* Properties */
 
-  attributeBindings: ['aria-hidden', 'role', 'tabindex', 'data-tether-enabled'],
+  attributeBindings: ['role', 'tabindex'],
   classNameBindings: ['effectClass'],
   classPrefix: 'ember-tooltip-or-popover',
 
@@ -106,12 +106,22 @@ export default EmberTetherComponent.extend({
 
   /* CPs */
 
-  'data-tether-enabled': computed('_isTetherEnabled', function() {
-    return this.get('_isTetherEnabled') ? 'true' : 'false';
+  // attributeBindings are handled asynchronously http://stackoverflow.com/a/18731021/3304337
+  // this observer makes it sync, which makes testing more consistent
+  dataTetherEnabledHandler: observer('_isTetherEnabled', function() {
+    let tetherEnabledString = this.get('_isTetherEnabled') ? 'true' : 'false';
+    let $element = this.$();
+    if ($element && $element.attr) {
+      $element.attr('data-tether-enabled', tetherEnabledString);
+    }
   }),
 
-  'aria-hidden': computed('isShown', function() {
-    return this.get('isShown') ? 'false' : 'true';
+  ariaHiddenHandler: observer('isShown', function() {
+    let ariaHiddenString = this.get('isShown') ? 'false' : 'true';
+    let $element = this.$();
+    if ($element && $element.attr) {
+      $element.attr('aria-hidden', ariaHiddenString);
+    }
   }),
 
   attachment: computed(function() {
@@ -175,9 +185,14 @@ export default EmberTetherComponent.extend({
   }),
 
   target: computed(function() {
-    const parentElement = this.$().parent();
+    const $element = this.$();
+    // it's not possible to access the DOM when running in Fastboot
+    if (!$element) {
+      return null;
+    }
 
-    let parentElementId = parentElement.attr('id');
+    const parentElement = $element.parent();
+    let parentElementId = parentElement && parentElement.attr('id');
 
     if (!parentElementId) {
       parentElementId = `target-for-tooltip-or-popover-${tooltipOrPopoverCounterId}`;
@@ -255,6 +270,7 @@ export default EmberTetherComponent.extend({
     run.cancel(this.get('_showTimer'));
 
     this.set('isShown', false);
+
     this.sendAction('onHide', this);
 
     this.stopTether();
@@ -262,6 +278,10 @@ export default EmberTetherComponent.extend({
 
   didInsertElement() {
     this._super(...arguments);
+
+    if (this.get('_shouldShowOnRender')) {
+      this.show();
+    }
 
     const target = this.get('target');
 
@@ -279,6 +299,11 @@ export default EmberTetherComponent.extend({
       'aria-describedby': `${this.get('elementId')}`,
       tabindex: $target.attr('tabindex') || this.get('tabindex'),
     });
+
+    // needed so that these 'aria-hidden' and
+    // 'data-tether-enabled' don't init to undefined
+    this.ariaHiddenHandler();
+    this.dataTetherEnabledHandler();
 
     /* When this component has rendered we need
     to check if Tether moved its position to keep the
@@ -345,7 +370,7 @@ export default EmberTetherComponent.extend({
   @method setTimer
   */
 
-  setTimer: Ember.observer('isShown', function() {
+  setTimer: observer('isShown', function() {
     const isShown = this.get('isShown');
 
     if (isShown) {
@@ -360,8 +385,8 @@ export default EmberTetherComponent.extend({
 
         const hideTimer = run.later(this, this.hide, duration);
 
-        /* Save timer ID for cancelling should an event
-        hide the tooltop before the duration */
+        /* Save timer ID for canceling should an event
+        hide the tooltip before the duration */
 
         this.set('_hideTimer', hideTimer);
       }
@@ -410,7 +435,7 @@ export default EmberTetherComponent.extend({
       this.set('_showTimer', _showTimer);
     } else {
 
-      /* If there is no delay, show the tooltop immediately */
+      /* If there is no delay, show the tooltip immediately */
 
       this.startTether();
       this.set('isShown', true);
@@ -433,13 +458,16 @@ export default EmberTetherComponent.extend({
   },
 
   willDestroy() {
-    const $target = $(this.get('target'));
+    // there's no jQuery when running in Fastboot
+    const $target = $ && $(this.get('target'));
 
     this.set('effect', null);
     this.hide();
 
-    $target.removeAttr('aria-describedby');
-    $target.off();
+    if ($target) {
+      $target.removeAttr('aria-describedby');
+      $target.off();
+    }
 
     this._super(...arguments); // Removes tether
 
@@ -460,6 +488,6 @@ export default EmberTetherComponent.extend({
       this.set('_isTetherEnabled', false);
       this.get('_tether').disable();
     });
-  }
+  },
 
 });
