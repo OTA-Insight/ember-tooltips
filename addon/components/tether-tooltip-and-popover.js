@@ -1,7 +1,14 @@
 import Ember from 'ember';
 import EmberTetherComponent from 'ember-tether/components/ember-tether';
 
-const { $, computed, observer, run, on } = Ember;
+const {
+  $,
+  assert,
+  computed,
+  observer,
+  on,
+  run,
+} = Ember;
 
 const defaultPosition = 'center';
 
@@ -32,6 +39,7 @@ export default EmberTetherComponent.extend({
     this._super(...arguments);
 
     let passedPropertiesObject = this.get('passedPropertiesObject');
+
     if (passedPropertiesObject) {
       this.setProperties(passedPropertiesObject);
     }
@@ -42,8 +50,8 @@ export default EmberTetherComponent.extend({
   delay: 0,
   delayOnChange: true,
   duration: 0,
-  effect: 'slide', // fade, slide, none
-  event: 'hover', // hover, click, focus, none
+  effect: 'slide', // Options: fade, slide, none
+  event: 'hover', // Options: hover, click, focus, none
   hideOn: null,
   role: 'tooltip',
   side: 'top',
@@ -57,7 +65,7 @@ export default EmberTetherComponent.extend({
   }),
   keepInWindow: true,
 
-  /*
+  /**
   When this property changes it repositions the tooltip.
 
   This isn't actually used in the code anywhere - it just
@@ -65,6 +73,7 @@ export default EmberTetherComponent.extend({
   triggered.
 
   @property updateFor
+  @public
   */
 
   updateFor: null,
@@ -106,11 +115,22 @@ export default EmberTetherComponent.extend({
 
   /* CPs */
 
-  // attributeBindings are handled asynchronously http://stackoverflow.com/a/18731021/3304337
-  // this observer makes it sync, which makes testing more consistent
+  /**
+   * The attributeBindings are handled asynchronously
+   *
+   * http://stackoverflow.com/a/18731021/3304337
+   *
+   * This observer makes it sync, which makes testing
+   * more consistent.
+   *
+   * @method dataTetherEnabledHandler
+   * @public
+   */
+
   dataTetherEnabledHandler: observer('_isTetherEnabled', function() {
     let tetherEnabledString = this.get('_isTetherEnabled') ? 'true' : 'false';
     let $element = this.$();
+
     if ($element && $element.attr) {
       $element.attr('data-tether-enabled', tetherEnabledString);
     }
@@ -119,6 +139,7 @@ export default EmberTetherComponent.extend({
   ariaHiddenHandler: observer('isShown', function() {
     let ariaHiddenString = this.get('isShown') ? 'false' : 'true';
     let $element = this.$();
+
     if ($element && $element.attr) {
       $element.attr('aria-hidden', ariaHiddenString);
     }
@@ -127,9 +148,10 @@ export default EmberTetherComponent.extend({
   attachment: computed(function() {
     const side = this.get('side');
 
-    let horizontalPosition, verticalPosition;
+    let horizontalPosition;
+    let verticalPosition;
 
-    switch(side) {
+    switch (side) {
       case 'top':
         horizontalPosition = defaultPosition;
         verticalPosition = 'bottom';
@@ -186,7 +208,11 @@ export default EmberTetherComponent.extend({
 
   target: computed(function() {
     const $element = this.$();
-    // it's not possible to access the DOM when running in Fastboot
+
+    /* It's not possible to access the DOM when
+    running in Fastboot
+    */
+
     if (!$element) {
       return null;
     }
@@ -211,7 +237,7 @@ export default EmberTetherComponent.extend({
     if (!this.get('sideIsVertical')) {
       return `center ${side}`;
     } else {
-      return `${side} center`; // top and bottom
+      return `${side} center`;
     }
   }),
 
@@ -231,10 +257,18 @@ export default EmberTetherComponent.extend({
       const event  = this.get('event');
 
       switch (event) {
-        case 'hover': hideOn = 'mouseleave'; break;
-        case 'focus': hideOn = 'blur'; break;
-        case 'ready': hideOn = null; break;
-        default: hideOn = event; break;
+        case 'hover':
+          hideOn = 'mouseleave';
+          break;
+        case 'focus':
+          hideOn = 'blur';
+          break;
+        case 'ready':
+          hideOn = null;
+          break;
+        default:
+          hideOn = event;
+          break;
       }
     }
 
@@ -248,8 +282,12 @@ export default EmberTetherComponent.extend({
       const event  = this.get('event');
 
       switch (event) {
-        case 'hover': showOn = 'mouseenter'; break;
-        default: showOn = event; break;
+        case 'hover':
+          showOn = 'mouseenter';
+          break;
+        default:
+          showOn = event;
+          break;
       }
     }
 
@@ -286,12 +324,12 @@ export default EmberTetherComponent.extend({
     const target = this.get('target');
 
     if (!target || target.indexOf('#') === -1) {
-      Ember.assert('You must specify a target attribute in the format target="#element-id" for the tooltip component');
+      assert('You must specify a target attribute in the format target="#element-id" for the tooltip component');
     }
 
     const $target = $(this.get('target'));
     const _tether = this.get('_tether');
-    const $_tether = $(_tether.element);
+    const $tether = $(_tether.element);
 
     this.sendAction('onRender', this);
 
@@ -300,8 +338,10 @@ export default EmberTetherComponent.extend({
       tabindex: $target.attr('tabindex') || this.get('tabindex'),
     });
 
-    // needed so that these 'aria-hidden' and
-    // 'data-tether-enabled' don't init to undefined
+    /* Needed so that these 'aria-hidden' and
+    'data-tether-enabled' don't init to undefined
+    */
+
     this.ariaHiddenHandler();
     this.dataTetherEnabledHandler();
 
@@ -312,7 +352,7 @@ export default EmberTetherComponent.extend({
     let renderedSide;
 
     ['top', 'right', 'bottom', 'left'].forEach((side) => {
-      if ($_tether.hasClass(`${this.get('classPrefix')}-target-attached-${side}`)) {
+      if ($tether.hasClass(`${this.get('classPrefix')}-target-attached-${side}`)) {
         renderedSide = side;
       }
     });
@@ -325,7 +365,7 @@ export default EmberTetherComponent.extend({
 
     let offset;
 
-    switch(renderedSide) {
+    switch (renderedSide) {
       case 'top':
         offset = `${spacing}px 0`;
         break;
@@ -396,8 +436,11 @@ export default EmberTetherComponent.extend({
   }),
 
   show() {
-    // this.positionTether() fixes the issues raised in
-    // https://github.com/sir-dunxalot/ember-tooltips/issues/75
+
+    /* Calling this.positionTether() fixes the issues raised in
+    https://github.com/sir-dunxalot/ember-tooltips/issues/75
+    */
+
     this.positionTether();
 
     if (this.get('isDestroying')) {
@@ -418,7 +461,7 @@ export default EmberTetherComponent.extend({
         already a tooltip/popover shown in the DOM. Check that here
         and adjust the delay as needed. */
 
-        let shownTooltipsOrPopovers = Ember.$(`.${this.get('classPrefix')}-element[aria-hidden="false"]`).length;
+        let shownTooltipsOrPopovers = $(`.${this.get('classPrefix')}-element[aria-hidden="false"]`).length;
 
         if (shownTooltipsOrPopovers) {
           delay = 0;
@@ -458,7 +501,9 @@ export default EmberTetherComponent.extend({
   },
 
   willDestroy() {
-    // there's no jQuery when running in Fastboot
+
+    /* There's no jQuery when running in Fastboot */
+
     const $target = $ && $(this.get('target'));
 
     this.set('effect', null);
@@ -475,18 +520,28 @@ export default EmberTetherComponent.extend({
   },
 
   startTether() {
-    // can't depend on `_tether.enabled` because it's not an
-    // Ember property (so won't trigger cp update when changed)
+
+    /* We can't depend on `_tether.enabled` because
+    it's not an Ember property (so won't trigger CP
+    update when changed)
+    */
+
     this.set('_isTetherEnabled', true);
     this.get('_tether').enable();
   },
 
   stopTether() {
     run.schedule('afterRender', () => {
-      // can't depend on `_tether.enabled` because it's not an
-      // Ember property (so won't trigger cp update when changed)
-      this.set('_isTetherEnabled', false);
-      this.get('_tether').disable();
+      if (!this.isDestroyed && !this.isDestroying) {
+
+        /* We can't depend on `_tether.enabled` because
+        it's not an Ember property (so won't trigger CP
+        update when changed)
+        */
+
+        this.set('_isTetherEnabled', false);
+        this.get('_tether').disable();
+      }
     });
   },
 

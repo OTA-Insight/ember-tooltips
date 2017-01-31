@@ -2,8 +2,10 @@ import { moduleForComponent, test } from 'ember-qunit';
 import { assertTooltipRendered } from '../../helpers/ember-tooltips';
 import hbs from 'htmlbars-inline-precompile';
 
+import { assertTooltipContent } from '../../helpers/ember-tooltips';
+
 moduleForComponent('tooltip-on-element', 'Integration | Component | tooltip on element', {
-  integration: true
+  integration: true,
 });
 
 test('tooltip-on-element renders', function(assert) {
@@ -16,12 +18,11 @@ test('tooltip-on-element renders', function(assert) {
     {{/tooltip-on-element}}
   `);
 
-
-  assert.equal(this.$().text().trim(), 'template block text',
-    'Should render with content');
+  assertTooltipContent(assert, {
+    contentString: 'template block text',
+  });
 
   assertTooltipRendered(assert);
-
 });
 
 test('tooltip-on-element has the proper aria-describedby tag', function(assert) {
@@ -41,7 +42,10 @@ test('tooltip-on-element has the proper aria-describedby tag', function(assert) 
   const $tooltipTarget = this.$('.target');
   const describedBy = $tooltipTarget.attr('aria-describedby');
 
-  assert.equal(this.$(`#${describedBy}`).text().trim(), 'Some info in a tooltip.');
+  assertTooltipContent(assert, {
+    selector: `#${describedBy}`,
+    contentString: 'Some info in a tooltip.',
+  });
   assert.equal(describedBy.indexOf('#'), '-1');
 
 });

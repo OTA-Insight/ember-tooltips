@@ -1,15 +1,28 @@
 import Ember from 'ember';
 import layout from 'ember-tooltips/templates/components/lazy-render-wrapper';
 
-const { computed, get, $ } = Ember;
+const {
+  Component,
+  ViewUtils,
+  $,
+  computed,
+  get,
+  isNone,
+  warn,
+} = Ember;
 
-// https://github.com/emberjs/rfcs/issues/168
-// https://github.com/emberjs/ember.js/pull/12500
+export const TARGET_EVENT_NAMESPACE = 'target-lazy-render-wrapper';
+
+/* Beware: use of private API! :(
+
+https://github.com/emberjs/rfcs/issues/168
+https://github.com/emberjs/ember.js/pull/12500
+*/
+
 function getParent(view) {
   if (get(view, 'tagName') === '') {
-    // Beware: use of private API! :(
-    if (Ember.ViewUtils && Ember.ViewUtils.getViewBounds) {
-      return $(Ember.ViewUtils.getViewBounds(view).parentElement);
+    if (ViewUtils && ViewUtils.getViewBounds) {
+      return $(ViewUtils.getViewBounds(view).parentElement);
     } else {
       return $(view._renderNode.contextualElement);
     }
@@ -19,176 +32,267 @@ function getParent(view) {
 }
 
 const PASSABLE_PROPERTIES = [
-	'delay',
-	'delayOnChange',
-	'duration',
-	'effect',
-	'event',
-	'hideOn',
-	'keepInWindow',
-	'side',
-	'showOn',
-	'spacing',
-	'isShown',
-	'tooltipIsVisible',
-	'hideDelay',
-	'target',
-	'text',
+  'delay',
+  'delayOnChange',
+  'duration',
+  'effect',
+  'event',
+  'hideOn',
+  'keepInWindow',
+  'side',
+  'showOn',
+  'spacing',
+  'isShown',
+  'tooltipIsVisible',
+  'hideDelay',
+  'target',
+  'text',
 
-	// non-publicized attributes
-	'updateFor',
-	'targetAttachment',
-	'attachment',
-	'role',
-	'tabindex',
-	'_shouldTargetGrandparentView',
+  /* Non-publicized attributes */
+
+  'updateFor',
+  'targetAttachment',
+  'attachment',
+  'role',
+  'tabindex',
+  '_shouldTargetGrandparentView',
 ];
 
 const PASSABLE_ACTIONS = [
-	'onDestroy',
-	'onHide',
-	'onRender',
-	'onShow',
+  'onDestroy',
+  'onHide',
+  'onRender',
+  'onShow',
 
-	// deprecated lifecycle actions
-	'onTooltipDestroy',
-	'onTooltipHide',
-	'onTooltipRender',
-	'onTooltipShow',
+  /* Deprecated lifecycle actions */
+
+  'onTooltipDestroy',
+  'onTooltipHide',
+  'onTooltipRender',
+  'onTooltipShow',
 ];
 
 const PASSABLE_OPTIONS = PASSABLE_PROPERTIES.concat(PASSABLE_ACTIONS);
 
-export default Ember.Component.extend({
-	tagName: '',
-	layout,
+export default Component.extend({
 
-	passedPropertiesObject: computed(...PASSABLE_OPTIONS, function() {
-		return PASSABLE_OPTIONS.reduce((passablePropertiesObject, key) => {
-			// if a property has been declared by Component extension ( TooltipOnElement.extend )
-			// or by handlebars instantiation ( {{tooltip-on-element}} ) then that property needs
-			// to be passed from this wrapper to the lazy-rendered tooltip or popover component
+  /* 1. Services */
 
-			let value = this.get(key);
+  /* 2. Defaults */
 
-			if (!Ember.isNone(value)) {
-				if (PASSABLE_ACTIONS.indexOf(key) >= 0) {
-					// if a user has declared a lifecycle action property (onShow='someFunc')
-					// then we must pass down the correctly-scoped action instead of value
+  tagName: '',
+  layout,
+  enableLazyRendering: false,
+  event: 'hover', // Options are: hover, click, focus, none
+  _childView: null, // This is set during the childView's didRender and is needed for the hide action
 
-					passablePropertiesObject[key] = () => this.sendAction(key);
-				} else {
-					passablePropertiesObject[key] = value;
-				}
-			}
+  _hasUserInteracted: false,
+  _hasRendered: false,
+  _shouldShowOnRender: false,
 
-			return passablePropertiesObject;
-		}, {});
-	}),
+  /* 3. Single line Computed Property */
 
-	enableLazyRendering: false,
-	_hasUserInteracted: false,
-	_hasRendered: false,
-	_shouldRender: computed('isShown', 'tooltipIsVisible', 'enableLazyRendering', '_hasUserInteracted', function() {
-		// if isShown, tooltipIsVisible, !enableLazyRendering, or _hasUserInteracted then
-		// we return true and set _hasRendered to true because
-		// there is never a scenario where this wrapper should destroy the tooltip
+  /* 4. Multiline Computed Property */
 
-		if (this.get('_hasRendered')) {
+  passedPropertiesObject: computed(...PASSABLE_OPTIONS, function() {
+    return PASSABLE_OPTIONS.reduce((passablePropertiesObject, key) => {
 
-			return true;
+      /* If a property has been declared by Component extension ( TooltipOnElement.extend )
+      or by handlebars instantiation ( {{tooltip-on-element}} ) then that property needs
+      to be passed from this wrapper to the lazy-rendered tooltip or popover component
+      */
 
-		} else if (this.get('isShown') || this.get('tooltipIsVisible')) {
+      let value = this.get(key);
 
-			this.set('_hasRendered', true);
-			return true;
+      if (!isNone(value)) {
+        if (PASSABLE_ACTIONS.indexOf(key) >= 0) {
 
-		} else if (!this.get('enableLazyRendering')) {
+          /* If a user has declared a lifecycle action property (onShow='someFunc')
+          then we must pass down the correctly-scoped action instead of value
+          */
 
-			this.set('_hasRendered', true);
-			return true;
+          passablePropertiesObject[key] = () => this.sendAction(key);
+        } else {
+          passablePropertiesObject[key] = value;
+        }
+      }
 
-		} else if (this.get('_hasUserInteracted')) {
+      return passablePropertiesObject;
+    }, {});
+  }),
 
-			this.set('_hasRendered', true);
-			return true;
+  /**
+   * A jQuery element that the _lazyRenderEvents will be
+   * attached to during didInsertElement and
+   * removed from during willDestroyElement
+   *
+   * @public
+   * @property $target
+   * @type jQuery element
+   * @default the parent jQuery element
+   */
 
-		}
+  $target: computed('target', 'tetherComponentName', function() {
+    const target = this.get('target'); // #some-id
+    let $target;
 
-		return false;
-	}),
-	_shouldShowOnRender: false,
+    if (target) {
+      $target = $(target);
+    } else if (this.get('tetherComponentName').indexOf('-on-component') >= 0) {
 
-	event: 'hover', // hover, click, focus, none
-	entryInteractionEvents: computed('event', function() {
-		// the lazy-render wrapper will only render the tooltip when
-		// the $parent element is interacted with. This CP defines which
-		// events will trigger the rendering. We always include focusin
-		// to keep the component accessible.
-		let entryInteractionEvents = ['focusin'];
-		let event = this.get('event');
-		if (event === 'hover') {
-			entryInteractionEvents.push('mouseenter');
-		} else if (event === 'click') {
-			entryInteractionEvents.push('click');
-		}
+      /* TODO(Andrew)
 
-		return entryInteractionEvents;
-	}),
+      Refactor this once we've gotten rid of the -on-component approach
+      share the functionality with `onComponentTarget`
+      */
 
-	didInsertElement() {
-		this._super(...arguments);
+      const targetView = this.get('parentView');
 
-		if (this.get('_shouldRender')) {
-			// if the tooltip _shouldRender then we don't need
-			// any special $parent event handling
-			return;
-		}
+      if (!targetView) {
+        warn('No targetView found');
 
-		const $parent = getParent(this);
+        return null;
+      } else if (!targetView.get('elementId')) {
+        warn('No targetView.elementId');
 
-		if (this.get('event') === 'hover') {
-			// We've seen instances where a user quickly mouseenter and mouseleave the $parent.
-			// By providing this event handler we ensure that the tooltip will only *show*
-			// if the user has mouseenter and not mouseleave immediately afterwards.
-			$parent.on('mouseleave.target-lazy-render-wrapper', () => {
-				this.set('_shouldShowOnRender', false);
-			});
-		}
+        return null;
+      }
 
-		this.get('entryInteractionEvents').forEach((entryInteractionEvent) => {
-			$parent.on(`${entryInteractionEvent}.target-lazy-render-wrapper`, () => {
-				if (this.get('_hasUserInteracted')) {
-					$parent.off(`${entryInteractionEvent}.target-lazy-render-wrapper`);
-				} else {
-					this.set('_hasUserInteracted', true);
-					this.set('_shouldShowOnRender', true);
-				}
-			});
-		});
-	},
+      const targetViewElementId = targetView.get('elementId');
 
-	childView: null, // this is set during the childView's didRender and is needed for the hide action
-	actions: {
-		hide() {
-			const childView = this.get('childView');
+      $target = $(`#${targetViewElementId}`);
+    } else {
+      $target = getParent(this);
+    }
 
-			// childView.actions is not available in Ember 1.13
-			// We will use childView._actions until we drop support for Ember 1.13
-			if (childView && childView._actions && childView._actions.hide) {
-				childView.send('hide');
-			}
-		},
-	},
+    return $target;
+  }),
 
-	willDestroyElement() {
-		this._super(...arguments);
+  _shouldRender: computed('isShown', 'tooltipIsVisible', 'enableLazyRendering', '_hasUserInteracted', function() {
 
-		const $parent = getParent(this);
-		this.get('entryInteractionEvents').forEach((entryInteractionEvent) => {
-			$parent.off(`${entryInteractionEvent}.target-lazy-render-wrapper`);
-		});
+    /* If isShown, tooltipIsVisible, !enableLazyRendering, or _hasUserInteracted then
+    we return true and set _hasRendered to true because
+    there is never a scenario where this wrapper should destroy the tooltip
+    */
 
-		$parent.off('mouseleave.target-lazy-render-wrapper');
-	},
+    if (this.get('_hasRendered')) {
+      return true;
+    } else if (this.get('isShown') || this.get('tooltipIsVisible')) {
+
+      this.set('_hasRendered', true);
+
+      return true;
+    } else if (!this.get('enableLazyRendering')) {
+
+      this.set('_hasRendered', true);
+
+      return true;
+    } else if (this.get('_hasUserInteracted')) {
+
+      this.set('_hasRendered', true);
+
+      return true;
+    }
+
+    return false;
+  }),
+
+  _lazyRenderEvents: computed('event', function() {
+
+    /* The lazy-render wrapper will only render the tooltip when
+    the $target element is interacted with. This CP defines which
+    events will trigger the rendering. Unless event="none" we always
+    include focusin to keep the component accessible.
+    */
+
+    let event = this.get('event');
+
+    if (event === 'none') {
+      return [];
+    }
+
+    let _lazyRenderEvents = ['focusin'];
+
+    if (event === 'hover') {
+      _lazyRenderEvents.push('mouseenter');
+    } else if (event === 'click') {
+      _lazyRenderEvents.push('click');
+    }
+
+    return _lazyRenderEvents;
+  }),
+
+  /* 5. Observers */
+
+  /* 6. Lifecycle Hooks */
+
+  didInsertElement() {
+    this._super(...arguments);
+
+    if (this.get('_shouldRender')) {
+
+      /* If the tooltip _shouldRender then we don't need
+      any special $target event handling
+      */
+
+      return;
+    }
+
+    let $target = this.get('$target');
+
+    if (this.get('event') === 'hover') {
+
+      /* We've seen instances where a user quickly mouseenter and mouseleave the $target.
+      By providing this event handler we ensure that the tooltip will only *show*
+      if the user has mouseenter and not mouseleave immediately afterwards.
+      */
+
+      $target.on(`mouseleave.${TARGET_EVENT_NAMESPACE}`, () => {
+        this.set('_shouldShowOnRender', false);
+      });
+    }
+
+    this.get('_lazyRenderEvents').forEach((_lazyRenderEvent) => {
+      $target.on(`${_lazyRenderEvent}.${TARGET_EVENT_NAMESPACE}`, () => {
+        if (this.get('_hasUserInteracted')) {
+          $target.off(`${_lazyRenderEvent}.${TARGET_EVENT_NAMESPACE}`);
+        } else {
+          this.set('_hasUserInteracted', true);
+          this.set('_shouldShowOnRender', true);
+          this.set('_isInProcessOfShowing', true);
+        }
+      });
+    });
+  },
+
+  willDestroyElement() {
+    this._super(...arguments);
+
+    const $target = this.get('$target');
+
+    this.get('_lazyRenderEvents').forEach((_lazyRenderEvent) => {
+      $target.off(`${_lazyRenderEvent}.${TARGET_EVENT_NAMESPACE}`);
+    });
+
+    $target.off(`mouseleave.${TARGET_EVENT_NAMESPACE}`);
+  },
+
+  /* 7. All actions */
+
+  actions: {
+    hide() {
+      const _childView = this.get('_childView');
+
+      /* The _childView.actions property is not available in Ember 1.13
+      We will use _childView._actions until we drop support for Ember 1.13
+      */
+
+      if (_childView && _childView._actions && _childView._actions.hide) {
+        _childView.send('hide');
+      }
+    },
+  },
+
+  /* 8. Custom / private methods */
+
 });
