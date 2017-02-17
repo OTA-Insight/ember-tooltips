@@ -217,7 +217,11 @@ export default EmberTetherComponent.extend({
       return null;
     }
 
-    const parentElement = $element.parent();
+    // Note:
+    // Update we added ourselves to support the extra parent div we added in the lazy-render-wrapper.hbs (glimmer2 needed it)
+    // This will probably break the 'tether-tooltip-and-popover' component, but normally we don't use this.
+    // const parentElement = $element.parent();
+    const parentElement = $element.parent().parent();
     let parentElementId = parentElement && parentElement.attr('id');
 
     if (!parentElementId) {
