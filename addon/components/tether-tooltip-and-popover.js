@@ -526,12 +526,12 @@ export default EmberTetherComponent.extend({
     // Commenting out this sendAction for now. This causes the issue
     // this.sendAction('onDestroy', this);
 
+    this._super(...arguments); // Removes tether
+
     // Better workaround?
     if (!this.isDestroying) {
       this.sendAction('onDestroy', this);
     }
-
-    this._super(...arguments); // Removes tether
   },
 
   startTether() {
