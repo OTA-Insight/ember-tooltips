@@ -518,12 +518,13 @@ export default EmberTetherComponent.extend({
       $target.off();
     }
 
-    // Custom change: changed order of these 2 lines
+    // Custom change: changed order of these 2 lines (doesn't fix errors afterall)
     // this._super(...arguments); // Removes tether
     //
     // this.sendAction('onDestroy', this);
 
-    this.sendAction('onDestroy', this);
+    // Commenting out this sendAction for now. This causes the issue
+    // this.sendAction('onDestroy', this);
 
     this._super(...arguments); // Removes tether
   },
