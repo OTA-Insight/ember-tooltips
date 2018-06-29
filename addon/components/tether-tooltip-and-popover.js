@@ -518,9 +518,14 @@ export default EmberTetherComponent.extend({
       $target.off();
     }
 
-    this._super(...arguments); // Removes tether
+    // Custom change: changed order of these 2 lines
+    // this._super(...arguments); // Removes tether
+    //
+    // this.sendAction('onDestroy', this);
 
     this.sendAction('onDestroy', this);
+
+    this._super(...arguments); // Removes tether
   },
 
   startTether() {
@@ -531,7 +536,11 @@ export default EmberTetherComponent.extend({
     */
 
     this.set('_isTetherEnabled', true);
-    this.get('_tether').enable();
+
+    // Custom change: added extra if check here
+    if (this.get('_tether')) {
+      this.get('_tether').enable();
+    }
   },
 
   stopTether() {
