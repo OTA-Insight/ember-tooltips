@@ -287,7 +287,9 @@ export default Component.extend({
       We will use _childView._actions until we drop support for Ember 1.13
       */
 
-      if (_childView && _childView._actions && _childView._actions.hide) {
+      // 27 July 2018 - custom change: https://github.com/sir-dunxalot/ember-tooltips/issues/248
+      // if (_childView && _childView._actions && _childView._actions.hide) {
+      if (_childView && _childView.actions && _childView.actions.hide) {
         _childView.send('hide');
       }
     },
