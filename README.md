@@ -15,8 +15,6 @@ Documentation for usage is below:
 
 - [Demo](http://sir-dunxalot.github.io/ember-tooltips/)
 - [3.0.0 Beta](#300-beta)
-- [1.0.0 Release](#100-release)
-- [2.4.0 Release](#240-release)
 - [Usage](#usage)
   - [tooltip-on-component](#tooltip-on-component)
   - [tooltip-on-element](#tooltip-on-element)
@@ -29,6 +27,7 @@ Documentation for usage is below:
 - [Testing](#testing)
   - [Test helpers](#test-helpers)
 - [Accessibility](#accessibility)
+- [Development](#development)
 
 ## 3.0.0 Beta
 
@@ -45,16 +44,6 @@ npm install --save-dev ember-tooltips@3.0.0-beta.2
 ```
 
 Please [report any issues you come across](https://github.com/sir-dunxalot/ember-tooltips/issues/new). Thank you in advance!
-
-## 1.0.0 Release
-
-Version 1.0.0 removed <a href="http://darsa.in/tooltip/" target="_blank">darsain/tooltip</a> as a dependency, in favor of using custom Ember code.
-
-You can use and see the pre-1.0 version on [this branch](https://github.com/sir-dunxalot/ember-tooltips/tree/pre-1.0). Alternatively, install `"ember-tooltips": "0.7.0"` in your `package.json`.
-
-## 2.4.0 Release
-
-Version 2.4.0 introduces lazy rendering. Tooltips and popovers generally don't need to be rendered until the user has interacted with the `$target` element. Adding `enableLazyRendering=true` to your component will enable this feature. In version 3.0.0 `enableLazyRendering` will default to `true` and you'll be able to opt-out of lazy rendering as necessary.
 
 ## Usage
 
@@ -170,6 +159,7 @@ Options are set as attributes on the tooltip/popover components. Current tooltip
 - [event](#event)
 - [hideOn](#hide-on)
 - [keepInWindow](#keep-in-window)
+- [setPin](#set-pin)
 - [side](#side)
 - [showOn](#show-on)
 - [spacing](#spacing)
@@ -316,6 +306,23 @@ it will render off-screen--}}
 {{tooltip-on-component
   keepInWindow=false
   side='right'
+}}
+```
+
+#### Set pin
+
+| Type    | Boolean   |
+|---------|-----------|
+| Default | undefined |
+
+If you find that `keepInWindow` is not keeping the entire tooltip in the window, try also using `setPin`. Note that this is somewhat experimental, and may not work for all window positioning issues (see #72).
+
+```hbs
+{{!--Force the tooltip to stay fully in-screen--}}
+
+{{tooltip-on-component
+  keepInWindow=true
+  setPin=true
 }}
 ```
 
@@ -1058,6 +1065,12 @@ Additionally, the `aria-describedby`, `title`, `id`, and `role` attributes are m
 There is always room for improvement and PRs to improve accessibility are welcome.
 
 ## Development
+
+This project is maintained by:
+
+[![Duncan Walker](https://avatars1.githubusercontent.com/u/4495352?s=70&v=4)](https://github.com/sir-dunxalot) | [![Max Fierke](https://avatars3.githubusercontent.com/u/354236?s=70&v=4)](https://github.com/maxfierke) |
+--- | --- |
+[Duncan Walker](https://github.com/sir-dunxalot) | [Max Fierke](https://github.com/maxfierke) |
 
 All PRs and issues are welcome.
 
